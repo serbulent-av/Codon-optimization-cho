@@ -10,13 +10,17 @@
 import os
 import numpy as np
 import json
+import tqdm
 
-from keras.preprocessing.text import tokenizer_from_json
-from keras.preprocessing.sequence import pad_sequences
+from keras_preprocessing.text import tokenizer_from_json
+from keras_preprocessing.sequence import pad_sequences
 from keras.models import load_model
 
+from tensorflow.python.client import device_lib
+print(device_lib.list_local_devices())
+
 # Set working directory and place trained model and tokenizers here
-os.chdir('/mnt/c/RNN/')
+os.chdir('/home/serbulent_antiverse_io/code/Codon-optimization-cho')
 
 # Place text file with AA sequence to be optimized in working directory
 # Set the name of the text file here:
@@ -43,8 +47,11 @@ def logits_to_text(logits, tokenizer):
 
 # Import sequence to optimize/predict from text file
 aa_seq_file = input_seq + ".txt"
-with open(aa_seq_file) as f:
-    aa_item = f.read()
+#with open(aa_seq_file) as f:
+#    aa_item = f.read()
+
+with open(aa_seq_file) as file:
+    aa_sequences = [line.rstrip() for line in file]
 
 # Import trained model as .h5    
 model = load_model('rnn_model.h5')
@@ -58,39 +65,46 @@ with open('dna_tokenizer.json') as f:
     dna_json = json.load(f)
 dna_tokenizer = tokenizer_from_json(dna_json)
 
-# Add stop codon identifier and calculate length of input sequence
-# Also remove any extra spaces, tabs, newlines
-aa_item_with_stop = aa_item + 'Z'
-aa_item_with_stop = aa_item_with_stop.replace(" ","")
-aa_item_with_stop = aa_item_with_stop.replace("\n","")
-aa_item_with_stop = aa_item_with_stop.replace("\r","")
-aa_item_with_stop = aa_item_with_stop.replace("\t","")
-aa_list = [aa_item_with_stop]
-seq_len = len(aa_item_with_stop)
+optimised_seq_list = []
+for aa_item in tqdm.tqdm(aa_sequences):
+    # Add stop codon identifier and calculate length of input sequence
+    # Also remove any extra spaces, tabs, newlines
+    #aa_item_with_stop = aa_item + 'Z'
+    aa_item_with_stop = aa_item
+    aa_item_with_stop = aa_item_with_stop.replace(" ","")
+    aa_item_with_stop = aa_item_with_stop.replace("\n","")
+    aa_item_with_stop = aa_item_with_stop.replace("\r","")
+    aa_item_with_stop = aa_item_with_stop.replace("\t","")
+    aa_list = [aa_item_with_stop]
+    seq_len = len(aa_item_with_stop)
 
-# Encrypt the input amino acid sequence by adding spaces
-aa_spaces = []
-for aa_seq in aa_list:
-    aa_current = encrypt(aa_seq,1)
-    aa_spaces.append(aa_current)
+    # Encrypt the input amino acid sequence by adding spaces
+    aa_spaces = []
+    for aa_seq in aa_list:
+        aa_current = encrypt(aa_seq,1)
+        aa_spaces.append(aa_current)
 
-# Tokenize the amino acid sequence
-# If using a different model, need to change dimensions accordingly
-preproc_aa = preprocess(aa_spaces)
-tmp_x = pad(preproc_aa, 8801)
-tmp_x = tmp_x.reshape((-1, 8801))
+    # Tokenize the amino acid sequence
+    # If using a different model, need to change dimensions accordingly
+    preproc_aa = preprocess(aa_spaces)
+    tmp_x = pad(preproc_aa, 8801)
+    tmp_x = tmp_x.reshape((-1, 8801))
 
-# Use the imported model to predict the best DNA sequence for the input AA sequence
-# Format the result to be a string of nucleotides (DNA sequence)
-seq_opt = logits_to_text(model.predict(tmp_x[:1])[0], dna_tokenizer)
-seq_opt_removepad = seq_opt[:(seq_len*4)]
-seq_opt_removespace = seq_opt_removepad.replace(" ","")
-seq_opt_final = seq_opt_removespace.upper()
+    # Use the imported model to predict the best DNA sequence for the input AA sequence
+    # Format the result to be a string of nucleotides (DNA sequence)
+    seq_opt = logits_to_text(model.predict(tmp_x[:1])[0], dna_tokenizer)
+    seq_opt_removepad = seq_opt[:(seq_len*4)]
+    seq_opt_removespace = seq_opt_removepad.replace(" ","")
+    seq_opt_final = seq_opt_removespace.upper()
+    optimised_seq_list.append(seq_opt_final)
 
-# Print the predicted/optimized DNA sequence
-print("Optimized DNA sequence:")
-print(seq_opt_final)
+    # Print the predicted/optimized DNA sequence
+#    print("Optimized DNA sequence:")
+#    print(seq_opt_final)
 
-# Export optimized/predicted DNA sequence as text file
+    # Export optimized/predicted DNA sequence as text file
+       
 with open(input_seq+"_opt.txt", "w") as f:
-    print(seq_opt_final, file=f)
+    for optimised_sequence in optimised_seq_list:
+        f.write("{0}\n".format(optimised_sequence))
+
